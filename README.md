@@ -1,6 +1,6 @@
 # claude-wcag-audit
 
-A [Claude Code](https://claude.com/claude-code) skill that audits a website against WCAG 2.1 and 2.2 Level A and AA. Ask Claude to audit a site and you get an HTML report with a result for every success criterion, the failing elements with fixes, and a checklist of what still needs a person.
+A [Claude Code](https://claude.com/claude-code) plugin that audits a website against WCAG 2.1 and 2.2 Level A and AA. Ask Claude to audit a site and you get an HTML report with a result for every success criterion, the failing elements with fixes, and a checklist of what still needs a person.
 
 ![HTML report showing summary counts and the success criteria table](docs/report.png)
 
@@ -8,26 +8,48 @@ A [Claude Code](https://claude.com/claude-code) skill that audits a website agai
 
 Most automated accessibility checks run axe-core and stop there. axe is excellent at what it covers, but it only has rules for about 22 of the 50 WCAG 2.1 A/AA success criteria, and many of those only partially. It doesn't press Tab, zoom the page, open a menu or apply text spacing, so keyboard traps, invisible focus, clipped text at 200% zoom and menus that only open on click all pass silently.
 
-This skill runs axe and then drives the page with Playwright the way a keyboard or low-vision user would. It's also explicit about coverage. Every criterion in the report is marked as failed, needing review, passed with good or partial coverage, manual only, or not applicable. That way a clean scan can't be mistaken for conformance.
+The plugin runs axe and then drives the page with Playwright the way a keyboard or low-vision user would. It's also explicit about coverage. Every criterion in the report is marked as failed, needing review, passed with good or partial coverage, manual only, or not applicable. That way a clean scan can't be mistaken for conformance.
 
-## Quick start
+## Install
 
-In Claude Code:
+claude-wcag-audit is a Claude Code plugin, and this repository is also its marketplace. In Claude Code:
 
 ```
 /plugin marketplace add LooporaData/claude-wcag-audit
 /plugin install claude-wcag-audit@looporadata
 ```
 
-Then ask for an audit:
+From a terminal, the same thing is:
+
+```bash
+claude plugin marketplace add LooporaData/claude-wcag-audit
+claude plugin install claude-wcag-audit@looporadata
+```
+
+To offer it to everyone working in a project, commit this to the project's `.claude/settings.json`. Claude Code then prompts each person to install it when they trust the folder.
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "looporadata": { "source": { "source": "github", "repo": "LooporaData/claude-wcag-audit" } }
+  },
+  "enabledPlugins": { "claude-wcag-audit@looporadata": true }
+}
+```
+
+You need Node.js 18 or later and npm. The first audit installs the pinned axe-core and Playwright into the plugin's data folder, which takes about a minute. The audit also needs Chromium. If Playwright's browser isn't installed, the script falls back to any Chromium already in the Playwright cache or to `CHROME_BIN`, and otherwise prints the command that installs it.
+
+To update, run `/plugin marketplace update looporadata`. To remove it, run `/plugin uninstall claude-wcag-audit@looporadata`.
+
+## Use
+
+Ask for an audit:
 
 ```
 /claude-wcag-audit:wcag-audit https://example.com
 ```
 
 or just say "run an accessibility audit on our staging site". Claude finds the pages from the sitemap, runs the audit, checks the heuristic findings against the live page, and reports back with the report path.
-
-The first audit installs the pinned axe-core and Playwright into the plugin's data folder, which takes about a minute. The audit needs Chromium. If Playwright's browser isn't installed, the script falls back to any Chromium already in the Playwright cache or to `CHROME_BIN`, and otherwise prints the command that installs it. `/plugin marketplace update looporadata` picks up new versions.
 
 ## What it checks
 
@@ -82,7 +104,7 @@ Claude checks the likely fails and review items before reporting them, and you c
 }
 ```
 
-Then re-render both reports without scanning again:
+Claude re-renders the reports after writing notes. To do it yourself from a clone, without scanning again:
 
 ```bash
 node scripts/render.mjs a11y-report
