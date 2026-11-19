@@ -1,0 +1,32 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Fixture</title>
+<style>
+body{margin:0;font:16px sans-serif}
+header{position:sticky;top:0;height:90px;background:#123;color:#fff;z-index:5}
+header a{color:#fff}
+.noring:focus{outline:none}
+.offscreen{position:absolute;left:-5000px}
+.fixed{height:40px;overflow:hidden;width:300px}
+.wide{width:900px;background:#eee}
+.clicky{cursor:pointer;color:#06c}
+input.faint{border:1px solid #ddd;background:#fff}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:80px;height:80px;background:#c33;animation:spin 3s linear infinite}
+#menu{display:none}
+</style></head><body>
+<a href="#nowhere">Skip to content</a>
+<header><nav><a href="/">Home</a> <a href="/other.html">Other</a></nav></header>
+<main>
+<h1>Fixture</h1>
+<button class="noring">No focus ring</button>
+<a class="offscreen" href="/x">Parked link</a>
+<div class="fixed">Short text that wraps to two lines here ok</div>
+<div class="wide">Too wide for reflow</div>
+<span class="clicky" onclick="alert(1)">Clickable span</span>
+<div role="button" id="t" aria-expanded="false" onclick="document.getElementById('menu').style.display='block'">Open menu (click only)</div>
+<ul id="menu"><li><a href="/a">A</a></li><li><a href="/b">B</a></li><li><a href="/c">C</a></li><li><a href="/d">D</a></li></ul>
+<label>Email <input class="faint" name="email"></label>
+<a href="/one">Read more</a> <a href="/two">Read more</a>
+<div class="spinner"></div>
+<div style="height:1200px"></div>
+<button id="low">Low button hidden under header when scrolled?</button>
+</main><div style="position:fixed;bottom:0;left:0;right:0;height:140px;background:#333;color:#fff">Cookie banner</div></body></html>
