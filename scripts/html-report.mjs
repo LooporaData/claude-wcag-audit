@@ -110,12 +110,13 @@ const JS = `
   });
   update();
   const toggle = document.getElementById('expand-all');
-  if (toggle) toggle.addEventListener('click', () => {
-    const open = toggle.getAttribute('aria-pressed') !== 'true';
-    document.querySelectorAll('#findings details').forEach(d => { d.open = open; });
-    toggle.setAttribute('aria-pressed', String(open));
-    toggle.textContent = open ? 'Collapse all elements' : 'Expand all elements';
-  });
+  const groups = [...document.querySelectorAll('#findings-section details')];
+  const label = () => { toggle.textContent = groups.every(d => d.open) ? 'Collapse all elements' : 'Expand all elements'; };
+  if (toggle && groups.length) {
+    label();
+    groups.forEach(d => d.addEventListener('toggle', label));
+    toggle.addEventListener('click', () => { const open = !groups.every(d => d.open); groups.forEach(d => { d.open = open; }); label(); });
+  } else if (toggle) toggle.hidden = true;
   window.addEventListener('beforeprint', () => document.querySelectorAll('details').forEach(d => { d.open = true; }));
 })();
 `;
@@ -173,9 +174,9 @@ export function renderHtml(r) {
 <dl><dt>WCAG</dt><dd>${g.sc.length ? esc(g.sc.join(', ')) : 'Best practice'}${g.impact ? ` · axe impact: ${esc(g.impact)}` : ''}</dd><dt>Scope</dt><dd>${targets.length} element${targets.length === 1 ? '' : 's'} on ${esc(pageList(allPages))}</dd>${g.note ? `<dt>Verification</dt><dd class="verify">${esc(g.note)}</dd>` : ''}<dt>Fix</dt><dd>${fix}</dd><dt>Check</dt><dd><code>${esc(g.check)}</code></dd></dl>
 <details${open ? ' open' : ''}><summary>${targets.length === 1 ? 'Affected element' : `Affected elements (${targets.length})`}</summary><ol class="els">${items}</ol>${targets.length > 25 ? `<p class="note">${targets.length - 25} more in results.json.</p>` : ''}</details></article>`;
   };
-  H.push(`<section aria-labelledby="findings"><h2 id="findings">Findings</h2><button type="button" class="btn" id="expand-all" aria-pressed="false">Expand all elements</button>`);
+  H.push(`<section id="findings-section" aria-labelledby="findings"><h2 id="findings">Findings</h2><button type="button" class="btn" id="expand-all">Expand all elements</button>`);
   H.push(`<h3 class="sub" style="margin-top:20px">Failures (${failGroups.length})</h3>`);
-  H.push(failGroups.length ? failGroups.map(g => renderGroup(g, true)).join('') : '<p>No failures found by the automated checks.</p>');
+  H.push(failGroups.length ? failGroups.map(g => renderGroup(g, false)).join('') : '<p>No failures found by the automated checks.</p>');
   H.push(`<h3 class="sub" style="margin-top:28px">Needs review (${reviewGroups.length})</h3>`);
   H.push(reviewGroups.length ? reviewGroups.map(g => renderGroup(g, false)).join('') : '<p>Nothing to review.</p>');
   if (resolvedGroups.length) H.push(`<h3 class="sub" style="margin-top:28px">Resolved during verification (${resolvedGroups.length})</h3><p class="note">Automated findings that were checked and are not failures. They are left out of the criteria results.</p>` + resolvedGroups.map(g => renderGroup(g, false)).join(''));
