@@ -61,7 +61,7 @@ export function buildModel(r) {
     const counted = { fail: ['fail', 'likely'], likely: ['likely'], review: ['review'] }[result] || [];
     const targets = new Set(fs.filter(f => counted.includes(f.status)).map(f => `${f.check}|${f.target}`));
     const how = [
-      ...(axeBySc[c.sc]?.length ? [`axe (${axeBySc[c.sc].length} rules)`] : []),
+      ...(axeBySc[c.sc]?.length ? [`axe (${axeBySc[c.sc].length} rule${axeBySc[c.sc].length === 1 ? '' : 's'})`] : []),
       ...(customBySc[c.sc] || []),
     ];
     return { ...c, result, count: targets.size, how };
@@ -92,7 +92,7 @@ export function renderReport(r) {
   const { total, invs, rows, tally, groups, pageList, sortedGroups } = buildModel(r);
   const L = [];
   L.push(`# Accessibility audit: ${r.base}`, '');
-  L.push(`${new Date(r.date).toUTCString()} · ${total} pages · axe-core ${r.axe.version} · ${r.durationSec}s`, '');
+  L.push(`${new Date(r.date).toUTCString()} · ${total} page${total === 1 ? '' : 's'} · axe-core ${r.axe.version} · ${r.durationSec}s`, '');
   L.push('Viewports: desktop 1280x800, mobile 390x844, 200% zoom (640x400), 400% zoom / reflow (320x256).', '');
   L.push('## Summary', '');
   L.push(`Against WCAG 2.2 Level A and AA: ${rows.filter(x => !x.obsolete).length} criteria, which is WCAG 2.1's ${rows.filter(x => x.ver !== '2.2').length} plus ${rows.filter(x => x.ver === '2.2').length} added in 2.2, without the obsolete 4.1.1:`, '');

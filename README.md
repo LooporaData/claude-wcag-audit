@@ -1,98 +1,156 @@
 # claude-wcag-audit
 
-A Claude Code skill that audits a website against WCAG 2.1 and 2.2 Level A and AA.
+A [Claude Code](https://claude.com/claude-code) skill that audits a website against WCAG 2.1 and 2.2 Level A and AA. Ask Claude to audit a site and you get an HTML report with a result for every success criterion, the failing elements with fixes, and a checklist of what still needs a person.
 
-Running axe-core on each page is a good start, but axe only has rules for about 22 of the 50 WCAG 2.1 A/AA success criteria, often partially, and it doesn't test keyboard operation, focus visibility, zoom, reflow, text spacing or interactive states. This skill adds scripted Playwright checks for those, reports a status for every criterion, and leaves a manual checklist for what can't be automated.
+![HTML report showing summary counts and the success criteria table](docs/report.png)
 
-## Install
+## Why
+
+Most automated accessibility checks run axe-core and stop there. axe is excellent at what it covers, but it only has rules for about 22 of the 50 WCAG 2.1 A/AA success criteria, and many of those only partially. It doesn't press Tab, zoom the page, open a menu or apply text spacing, so keyboard traps, invisible focus, clipped text at 200% zoom and menus that only open on click all pass silently.
+
+This skill runs axe and then drives the page with Playwright the way a keyboard or low-vision user would. It's also explicit about coverage. Every criterion in the report is marked as failed, needing review, passed with good or partial coverage, manual only, or not applicable. That way a clean scan can't be mistaken for conformance.
+
+## Quick start
 
 ```bash
 git clone https://github.com/LooporaData/claude-wcag-audit ~/.claude/skills/a11y
 cd ~/.claude/skills/a11y && npm install
 ```
 
-Claude Code loads skills from `~/.claude/skills/<name>/SKILL.md` (or `.claude/skills/` inside a project), so no settings change is needed. The audit uses Playwright's Chromium. If it isn't installed, the script falls back to any Chromium already in the Playwright cache, or to `CHROME_BIN`. Otherwise run `npx playwright install chromium`.
+Then, in Claude Code:
 
-## Use
+```
+/a11y https://example.com
+```
 
-Ask Claude Code to audit a site ("run an accessibility audit on https://example.com", or `/a11y`). Claude runs the script, verifies the heuristic findings, records its conclusions and reports back.
+or just ask: "run an accessibility audit on our staging site". Claude finds the pages from the sitemap, runs the audit, checks the heuristic findings against the live page, and reports back with the report path.
 
-You can also run the script directly:
+Claude Code picks up skills from `~/.claude/skills/<name>/SKILL.md`, or from `.claude/skills/` inside a project, so there's nothing to configure. The audit needs Chromium. If Playwright's browser isn't installed, the script falls back to any Chromium already in the Playwright cache or to `CHROME_BIN`; otherwise run `npx playwright install chromium`.
+
+## What it checks
+
+Each page is loaded at four sizes: desktop (1280×800), mobile (390×844), 200% zoom and 400% zoom.
+
+| Area | What the script does | WCAG |
+|---|---|---|
+| axe-core | Runs axe 4.10.2 with the WCAG 2.0, 2.1 and 2.2 A/AA tags plus best practices, at desktop and mobile. Undecided results (text on gradients, for example) are kept as "needs review". | many |
+| Keyboard | Tabs through the whole page. At each stop it compares screenshots with and without focus, checks the element is visible and not hidden under a sticky header or banner, and watches for focus that moves the page or opens a window. Afterwards it reports traps, interactive elements Tab never reached, backwards jumps in focus order and broken skip links. | 2.1.1, 2.1.2, 2.4.1, 2.4.3, 2.4.7, 2.4.11, 3.2.1 |
+| Menus and dialogs | Opens each menu, disclosure and dialog trigger with Enter and Space and compares that with a click. Checks `aria-expanded`, reruns axe on the opened state, and checks focus moves into dialogs, Escape closes them and focus returns. | 2.1.1, 2.4.3, 4.1.2 |
+| Hover content | Hover-revealed submenus and tooltips must also appear on keyboard focus and close with Escape. | 1.4.13, 2.1.1 |
+| Zoom and spacing | Looks for horizontal scrolling and clipped text at 320 CSS px, clipped text at 200%, and clipping after applying the WCAG text-spacing values. | 1.4.4, 1.4.10, 1.4.12 |
+| Forms | Field border contrast of 3:1, autocomplete tokens on name, email, phone and similar fields, placeholder-only labels, and `<select>` changes that navigate. | 1.3.5, 1.4.11, 3.2.2, 3.3.2 |
+| Motion | Infinite or long animations and autoplaying media, and whether `prefers-reduced-motion` stops them. | 1.4.2, 2.2.2 |
+| Content | Generic and ambiguous link text, alt text that looks like a filename. | 1.1.1, 2.4.4 |
+| Across pages | Duplicate titles, navigation order and the placement of contact or help links. | 2.4.2, 3.2.3, 3.2.6 |
+
+The full mapping, including the manual steps left for each criterion, is in [`scripts/wcag.mjs`](scripts/wcag.mjs).
+
+## The report
+
+Each audit writes four things to the output folder:
+
+- `report.html` is a single file with no external requests. It has the summary, a filterable table of all criteria linked to the W3C Understanding pages, findings grouped across pages, a manual checklist that remembers your ticks, evidence for manual review (alt text inventory, forms, headings, media) and a per-page table. It works in light and dark mode, prints cleanly, and passes its own audit.
+- `report.md` has the same content for pasting into issues or docs.
+- `results.json` holds every raw finding.
+- `shots/` holds screenshots for focus-indicator findings.
+
+Findings are graded so you know how much to trust them:
+
+| Grade | Meaning |
+|---|---|
+| Fail | A definite failure, such as an axe violation or a toggle that ignores the keyboard. |
+| Likely fail | Found by a heuristic. Confirm it on the page before filing it. |
+| Needs review | The tool can't decide. A person needs to look or make a call. |
+| Best practice | Worth fixing, but not a WCAG A/AA failure. |
+
+### Recording what you verified
+
+Claude checks the likely fails and review items before reporting them, and you can do the same. Write the conclusions to `notes.json` in the output folder, keyed by the check id shown in the report:
+
+```json
+{
+  "input-boundary-contrast": {
+    "verdict": "confirmed",
+    "note": "Border #919ab0 on white measured at 2.82:1."
+  },
+  "motion-no-pause": {
+    "verdict": "decision",
+    "note": "Hero animation stops under reduced motion. Product to decide on a pause control."
+  }
+}
+```
+
+Then re-render both reports without scanning again:
+
+```bash
+node scripts/render.mjs a11y-report
+```
+
+`confirmed` turns a likely fail or review item into a fail. `false-positive` and `no-issue` move it to a "Resolved during verification" section and out of the criteria results. `decision` keeps it under review and labels it for the owner. A note without a verdict is shown as-is.
+
+## Running the script directly
 
 ```bash
 node scripts/audit.mjs https://example.com --out a11y-report
 node scripts/audit.mjs http://localhost:3000 --pages /,/contact,/pricing --out a11y-report
 ```
 
-| Option | Default | Notes |
+| Option | Default | |
 |---|---|---|
-| `--sitemap URL` | `<base>/sitemap.xml` | Sitemap indexes are followed. Without a sitemap the home page links are crawled. |
-| `--pages /a,/b` | | Explicit page list, paths or full URLs |
+| `--sitemap URL` | `<base>/sitemap.xml` | Sitemap indexes are followed. With no sitemap, links on the home page are crawled. |
+| `--pages /a,/b` | | Paths or full URLs, instead of the sitemap |
 | `--max-pages N` | 40 | |
 | `--concurrency N` | 3 | Pages audited in parallel |
-| `--max-tabs N` | 200 | Tab presses per page in the keyboard walk |
-| `--skip list` | | Any of `keyboard,toggles,hover,mobile,zoom,spacing` |
+| `--max-tabs N` | 200 | Tab presses per page |
+| `--skip LIST` | | Any of `keyboard`, `toggles`, `hover`, `mobile`, `zoom`, `spacing` |
 | `--out DIR` | `./a11y-report` | |
 
-A page takes about 20 to 40 seconds. The script never submits forms, but it does open menus, dialogs and disclosures, and changes `<select>` values, so point it at sites you own.
+Expect 20 to 40 seconds per page. The script never submits forms. It does open menus and dialogs and change `<select>` values, so run it against sites you own, ideally staging. It starts each page in a fresh browser with no login, so authenticated areas aren't covered yet.
 
-## What it checks
+## How it works
 
-- **axe-core 4.10.2** with the `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, `wcag22aa` and `best-practice` tags, at desktop and mobile widths. axe is installed from npm and injected through Playwright, so a strict Content-Security-Policy doesn't block it. axe's "needs review" results are reported instead of dropped.
-- **Keyboard walk.** Tabs through every page. At each stop it compares screenshots with and without focus to detect missing focus indicators (2.4.7), checks whether a sticky header or banner covers the focused element (2.4.11), and flags focus on invisible elements. It also detects keyboard traps (2.1.2), interactive elements Tab never reaches (2.1.1), backwards jumps in focus order (2.4.3), focus that changes the page (3.2.1) and broken skip links (2.4.1).
-- **Interactive states.** Opens each menu, disclosure and dialog trigger with Enter and Space and compares that with a mouse click (2.1.1). Checks that `aria-expanded` updates (4.1.2), reruns axe on the opened state, and checks that focus moves into dialogs, that Escape closes them and that focus returns to the trigger. Hover-revealed submenus and tooltips must also appear on keyboard focus and dismiss with Escape (1.4.13).
-- **Zoom and spacing.** 200% zoom (1.4.4) and 400% / 320 CSS px reflow (1.4.10) as real viewports, plus the WCAG text-spacing overrides (1.4.12). It reports horizontal scrolling with the offending elements, and text that becomes clipped.
-- **Forms.** Field boundary contrast of 3:1 (1.4.11), autocomplete tokens on personal-data fields (1.3.5), placeholder-only labels (3.3.2), and `<select>` changes that navigate (3.2.2).
-- **Motion.** Infinite or longer-than-5-second animations and autoplaying media (2.2.2, 1.4.2), and whether `prefers-reduced-motion` stops them.
-- **Content and consistency.** Generic or ambiguous link text (2.4.4), filename-like alt text (1.1.1), duplicate titles (2.4.2), navigation order (3.2.3) and help-link placement (3.2.6) across pages.
+- axe is injected with Playwright's `page.evaluate` in a context that bypasses CSP, so a strict `script-src` doesn't block it. The script doesn't load anything from a CDN.
+- The focus check takes a screenshot of each focused element and its surroundings, blurs it, takes another and counts pixels that changed significantly. Fewer than ten means there's no visible indicator.
+- Zoom levels are real viewports at a higher device pixel ratio (640×400 at 2x for 200%, 320×256 at 4x for 400%), which matches how browser zoom changes layout.
+- Clipping is found by measuring each text node's rendered boxes against the nearest `overflow: hidden` ancestor. Visually hidden text, `aria-hidden` content and text inside scrollable containers are ignored.
+- The keyboard walk understands roving tabindex in tabs and menus, native date inputs and embedded frames, so those don't show up as traps or unreachable elements.
 
-`scripts/wcag.mjs` maps each criterion to its checks, how good the coverage is, and the manual steps that remain.
+## Limits
 
-## Output
+Automated checks can't establish WCAG conformance. The report's manual checklist covers the rest. In particular, a person still needs to:
 
-- `report.html`: a self-contained report that works offline, in light and dark mode. It has the criteria matrix with filters, findings grouped across pages, a manual checklist that remembers ticks, evidence for manual review (alt text, forms, headings, media) and a summary per page. It passes its own audit.
-- `report.md`: the same content as Markdown.
-- `results.json`: raw findings.
-- `shots/`: screenshots for focus-indicator findings.
+- test with a screen reader, including status messages and live regions;
+- check captions, audio description and flashing content;
+- test form error handling on a test environment;
+- judge whether alt text, link text, headings and labels are meaningful;
+- check pointer gestures, dragging and single-key shortcuts.
 
-Findings are graded **Fail** (confident), **Likely fail** (heuristic), **Needs review** or **Best practice**. Automated testing can't establish conformance, and the report says so.
+## Development
 
-### Verification notes
-
-After checking findings, record the conclusions in `<out>/notes.json` and re-render without rescanning:
-
-```json
-{
-  "input-boundary-contrast": { "verdict": "confirmed", "note": "Border #919ab0 on white measured at 2.82:1." },
-  "motion-no-pause": { "verdict": "decision", "note": "Hero loops stop under reduced motion; product owner to decide on a pause control." }
-}
+```
+SKILL.md              instructions Claude follows
+scripts/audit.mjs     page discovery, browser checks, findings
+scripts/page-helpers.js  in-page functions injected into every audited page
+scripts/wcag.mjs      success criteria, coverage, check definitions
+scripts/report.mjs    shared report model and Markdown output
+scripts/html-report.mjs  HTML output
+scripts/render.mjs    re-renders reports from results.json and notes.json
+test/fixture.html     page with planted failures
 ```
 
-```bash
-node scripts/render.mjs a11y-report
-```
-
-- `confirmed` promotes a likely fail or review item to a fail.
-- `false-positive` and `no-issue` move the item to "Resolved during verification" and leave it out of the criteria results.
-- `decision` keeps it under review, labeled for the owner.
-
-## Testing
-
-`test/fixture.html` is a page with planted failures: a missing focus indicator, an off-screen focusable link, a sticky banner covering focus, clipped text under text spacing, a page too wide at 320px, a click-only toggle, a broken skip link, a low-contrast input, and more. After changing a heuristic, serve it and confirm every check still fires:
+After changing a heuristic, audit the fixture and confirm every planted failure is still reported:
 
 ```bash
 (cd test && python3 -m http.server 8765) &
 node scripts/audit.mjs http://localhost:8765 --pages /fixture.html --out /tmp/fixture-report
 ```
 
-## Limits
-
-Some things still need a person: screen reader announcements and status messages, captions and audio description, form error handling (the script won't submit forms), the quality of alt text, link text and headings, pointer gestures, single-key shortcuts, and anything behind a login.
+Also run it against a real site you know well. Most heuristic bugs show up as false positives on production markup, not on the fixture.
 
 ## License
 
 MIT, see [LICENSE](LICENSE).
 
-Dependencies are installed by `npm install` and aren't stored in this repository: [axe-core](https://github.com/dequelabs/axe-core) by Deque Systems ([MPL-2.0](https://www.mozilla.org/MPL/2.0/)) and [Playwright](https://github.com/microsoft/playwright) (Apache-2.0). Versions are pinned in `package.json` and `package-lock.json`.
+axe-core (Deque Systems, [MPL-2.0](https://www.mozilla.org/MPL/2.0/)) and Playwright (Microsoft, Apache-2.0) are installed by `npm install` and aren't included in this repository. Versions are pinned in `package-lock.json`.
 
-Inspired by [airowe/claude-a11y-skill](https://github.com/airowe/claude-a11y-skill), which ran axe-core from a Claude Code skill.
+The idea of running axe from a Claude Code skill comes from [airowe/claude-a11y-skill](https://github.com/airowe/claude-a11y-skill).
