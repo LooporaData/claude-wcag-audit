@@ -1,5 +1,5 @@
 ---
-name: a11y
+name: wcag-audit
 description: Audit a website or web app against WCAG 2.1/2.2 Level A and AA. Runs axe-core plus scripted keyboard, focus, zoom, reflow, text-spacing, motion, menu/dialog and cross-page checks with Playwright, then produces a success-criterion matrix, verified findings and a manual checklist. Use for "accessibility audit", "a11y", "WCAG", "check accessibility", "is the site accessible".
 ---
 
@@ -16,10 +16,10 @@ Automated tools can't certify WCAG conformance. This skill automates as much as 
 
 ## 2. Run the audit
 
-First run in this skill directory: `npm install` (installs Playwright and axe-core). If Playwright's bundled browser is missing, the script falls back to any Chromium in the Playwright cache, or `CHROME_BIN`. Otherwise run `npx playwright install chromium` there.
+On the first run the script installs the pinned axe-core and Playwright into the plugin's data folder, which takes about a minute and needs network access. If Playwright's bundled browser is missing, the script falls back to any Chromium in the Playwright cache, or `CHROME_BIN`. Otherwise its error message gives the exact `install chromium` command to run.
 
 ```bash
-node ~/.claude/skills/a11y/scripts/audit.mjs <base-url> --out <scratch-dir>/a11y-report \
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" node "${CLAUDE_PLUGIN_ROOT}/scripts/audit.mjs" <base-url> --out <scratch-dir>/a11y-report \
   [--pages /,/contact] [--max-pages 40] [--concurrency 3] [--max-tabs 200] \
   [--skip keyboard,toggles,hover,mobile,zoom,spacing]
 ```
@@ -31,7 +31,7 @@ It takes about 20 to 40 seconds per page at concurrency 3, so run it in the back
 - `results.json`
 - `shots/`: focus screenshots
 
-axe-core is an npm dependency (pinned in `package.json`). The script injects it through Playwright with CSP bypass, so strict Content-Security-Policy headers don't block it.
+axe-core is an npm dependency (pinned in `package-lock.json`). The script injects it through Playwright with CSP bypass, so strict Content-Security-Policy headers don't block it.
 
 ### What it checks
 
@@ -76,7 +76,7 @@ Record what you verified in `<out>/notes.json`, keyed by check id (the `Check` v
 - `decision` keeps it under Needs review, labeled as needing the owner's decision.
 - A note with no verdict just annotates the group.
 
-Then regenerate both reports without rescanning: `node ~/.claude/skills/a11y/scripts/render.mjs <out>`. If a false positive comes from a heuristic in the script, fix the script too and rerun the fixture checks before relying on it.
+Then regenerate both reports without rescanning: `node "${CLAUDE_PLUGIN_ROOT}/scripts/render.mjs" <out>`. If a false positive comes from a heuristic in the script, fix the script too and rerun the fixture checks before relying on it.
 
 ## 4. Report to the user
 

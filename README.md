@@ -12,20 +12,22 @@ This skill runs axe and then drives the page with Playwright the way a keyboard 
 
 ## Quick start
 
-```bash
-git clone https://github.com/LooporaData/claude-wcag-audit ~/.claude/skills/a11y
-cd ~/.claude/skills/a11y && npm install
-```
-
-Then, in Claude Code:
+In Claude Code:
 
 ```
-/a11y https://example.com
+/plugin marketplace add LooporaData/claude-wcag-audit
+/plugin install claude-wcag-audit@looporadata
 ```
 
-or just ask: "run an accessibility audit on our staging site". Claude finds the pages from the sitemap, runs the audit, checks the heuristic findings against the live page, and reports back with the report path.
+Then ask for an audit:
 
-Claude Code picks up skills from `~/.claude/skills/<name>/SKILL.md`, or from `.claude/skills/` inside a project, so there's nothing to configure. The audit needs Chromium. If Playwright's browser isn't installed, the script falls back to any Chromium already in the Playwright cache or to `CHROME_BIN`; otherwise run `npx playwright install chromium`.
+```
+/claude-wcag-audit:wcag-audit https://example.com
+```
+
+or just say "run an accessibility audit on our staging site". Claude finds the pages from the sitemap, runs the audit, checks the heuristic findings against the live page, and reports back with the report path.
+
+The first audit installs the pinned axe-core and Playwright into the plugin's data folder, which takes about a minute. The audit needs Chromium. If Playwright's browser isn't installed, the script falls back to any Chromium already in the Playwright cache or to `CHROME_BIN`, and otherwise prints the command that installs it. `/plugin marketplace update looporadata` picks up new versions.
 
 ## What it checks
 
@@ -90,6 +92,8 @@ node scripts/render.mjs a11y-report
 
 ## Running the script directly
 
+From a clone of this repository, after `npm install`:
+
 ```bash
 node scripts/audit.mjs https://example.com --out a11y-report
 node scripts/audit.mjs http://localhost:3000 --pages /,/contact,/pricing --out a11y-report
@@ -128,8 +132,10 @@ Automated checks can't establish WCAG conformance. The report's manual checklist
 ## Development
 
 ```
-SKILL.md              instructions Claude follows
+.claude-plugin/       plugin and marketplace manifests
+skills/wcag-audit/SKILL.md  instructions Claude follows
 scripts/audit.mjs     page discovery, browser checks, findings
+scripts/deps.mjs      finds or installs axe-core and Playwright
 scripts/page-helpers.js  in-page functions injected into every audited page
 scripts/wcag.mjs      success criteria, coverage, check definitions
 scripts/report.mjs    shared report model and Markdown output
@@ -137,6 +143,8 @@ scripts/html-report.mjs  HTML output
 scripts/render.mjs    re-renders reports from results.json and notes.json
 test/fixture.html     page with planted failures
 ```
+
+To try local changes in Claude Code, start it with `claude --plugin-dir /path/to/claude-wcag-audit`. Bump `version` in `.claude-plugin/plugin.json` and `package.json` for each release, since installed copies update by version.
 
 After changing a heuristic, audit the fixture and confirm every planted failure is still reported:
 
@@ -151,6 +159,6 @@ Also run it against a real site you know well. Most heuristic bugs show up as fa
 
 MIT, see [LICENSE](LICENSE).
 
-axe-core (Deque Systems, [MPL-2.0](https://www.mozilla.org/MPL/2.0/)) and Playwright (Microsoft, Apache-2.0) are installed by `npm install` and aren't included in this repository. Versions are pinned in `package-lock.json`.
+axe-core (Deque Systems, [MPL-2.0](https://www.mozilla.org/MPL/2.0/)) and Playwright (Microsoft, Apache-2.0) are installed from npm at first run and aren't included in this repository. Versions are pinned in `package-lock.json`.
 
 The idea of running axe from a Claude Code skill comes from [airowe/claude-a11y-skill](https://github.com/airowe/claude-a11y-skill).

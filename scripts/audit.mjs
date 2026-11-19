@@ -5,18 +5,16 @@
 // usage: node audit.mjs <base-url> [--sitemap URL] [--pages /a,/b] [--max-pages 40]
 //                       [--concurrency 3] [--max-tabs 200] [--out DIR]
 //                       [--skip keyboard,toggles,hover,mobile,zoom,spacing]
-import { chromium } from 'playwright';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { CHECKS } from './wcag.mjs';
 import { renderReport } from './report.mjs';
 import { renderHtml } from './html-report.mjs';
+import { chromium, AXE_SRC, PLAYWRIGHT_CLI } from './deps.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const AXE_SRC = readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
 const HELPERS = readFileSync(join(HERE, 'page-helpers.js'), 'utf8');
 const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
 const SPACING_CSS = '* { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important; } p { margin-bottom: 2em !important; }';
@@ -75,7 +73,7 @@ async function launch() {
   try { return await chromium.launch(); } catch (e) {
     const p = cachedChromium();
     if (p) { console.error(`[a11y] bundled browser missing, using cached ${p}`); return chromium.launch({ executablePath: p }); }
-    throw new Error(`No Chromium available. Run "npx playwright install chromium" in ${dirname(HERE)} or set CHROME_BIN.\n${e.message}`);
+    throw new Error(`No Chromium available. Run "node ${PLAYWRIGHT_CLI} install chromium" or set CHROME_BIN.\n${e.message}`);
   }
 }
 
