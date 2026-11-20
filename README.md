@@ -105,7 +105,13 @@ Findings are graded so you know how much to trust them:
 
 ### Recording what you verified
 
-Claude checks the likely fails and review items before reporting them, and you can do the same. Write the conclusions to `notes.json` in the output folder, keyed by the check id shown in the report:
+Claude checks the likely fails and review items before reporting them, and you can do the same. For text on gradients or images, targets axe couldn't size, and clipped text, `measure.mjs` takes the measurements for you and prints them as JSON:
+
+```bash
+node scripts/measure.mjs a11y-report
+```
+
+Write the conclusions to `notes.json` in the output folder, keyed by the check id shown in the report:
 
 ```json
 {
@@ -155,7 +161,8 @@ Expect 20 to 40 seconds per page. The script never submits forms. It does open m
 - axe is injected with Playwright's `page.evaluate` in a context that bypasses CSP, so a strict `script-src` doesn't block it. The script doesn't load anything from a CDN.
 - The focus check takes a screenshot of each focused element and its surroundings, blurs it, takes another and counts pixels that changed significantly. Fewer than ten means there's no visible indicator.
 - Zoom levels are real viewports at a higher device pixel ratio (640×400 at 2x for 200%, 320×256 at 4x for 400%), which matches how browser zoom changes layout.
-- Clipping is found by measuring each text node's rendered boxes against the `overflow: hidden` ancestor that cuts it off. The finding names the element that holds the text and the box that clips it. Visually hidden text, `aria-hidden` content and text inside scrollable containers are ignored. A select chevron (a small no-repeat background image) does not skip the field-border check.
+- Clipping is found by measuring each text node's rendered boxes against the `overflow: hidden` ancestor that cuts it off. The finding names the element that holds the text and the box that clips it. Visually hidden text, `aria-hidden` content and text inside scrollable containers are ignored.
+- Form field borders are measured against the background around the field. A field with a gradient or a large background image is skipped, but a small dropdown arrow icon isn't.
 - The keyboard walk understands roving tabindex in tabs and menus, native date inputs and embedded frames, so those don't show up as traps or unreachable elements.
 
 ## Limits
