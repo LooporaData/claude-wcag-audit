@@ -1,6 +1,6 @@
 # claude-wcag-audit
 
-A [Claude Code](https://claude.com/claude-code) plugin that audits a website against WCAG 2.1 and 2.2 Level A and AA. Ask Claude to audit a site and you get an HTML report with a result for every success criterion, the failing elements with fixes, and a checklist of what still needs a person.
+A [Claude Code](https://claude.com/claude-code) plugin, also usable in Grok Build, that audits a website against WCAG 2.1 and 2.2 Level A and AA. Ask Claude to audit a site and you get an HTML report with a result for every success criterion, the failing elements with fixes, and a checklist of what still needs a person.
 
 ![HTML report showing summary counts and the success criteria table](docs/report.png)
 
@@ -12,7 +12,13 @@ The plugin runs axe and then drives the page with Playwright the way a keyboard 
 
 ## Install
 
-claude-wcag-audit is a Claude Code plugin, and this repository is also its marketplace. In Claude Code:
+This repository is a Claude Code plugin and its own marketplace. Grok Build reads the same plugin format, so it installs from here too.
+
+It runs on macOS and Linux. Windows should work too, but hasn't been tested yet. You need Node.js 18 or later and npm. The first audit installs the pinned axe-core and Playwright, which takes about a minute. The audit also needs Chromium. If Playwright's browser isn't installed, the script falls back to any Chromium already in the Playwright cache or to `CHROME_BIN`, and otherwise prints the command that installs it.
+
+### Claude Code
+
+In Claude Code:
 
 ```
 /plugin marketplace add LooporaData/claude-wcag-audit
@@ -37,9 +43,19 @@ To offer it to everyone working in a project, commit this to the project's `.cla
 }
 ```
 
-It runs on macOS and Linux. Windows should work too, but hasn't been tested yet. You need Node.js 18 or later and npm. The first audit installs the pinned axe-core and Playwright into the plugin's data folder, which takes about a minute. The audit also needs Chromium. If Playwright's browser isn't installed, the script falls back to any Chromium already in the Playwright cache or to `CHROME_BIN`, and otherwise prints the command that installs it.
+To update, run `/plugin marketplace update looporadata`. To remove it, run `/plugin uninstall claude-wcag-audit@looporadata`. Dependencies go in the plugin's data folder.
 
-To update, run `/plugin marketplace update looporadata`. To remove it, run `/plugin uninstall claude-wcag-audit@looporadata`.
+### Grok Build
+
+From a terminal:
+
+```bash
+grok plugin install LooporaData/claude-wcag-audit --trust
+```
+
+`--trust` lets the plugin's skill load without a separate confirmation. Without it, approve the plugin in `/plugins` before the skill shows up. Grok also picks up the `looporadata` marketplace if you've already added it in Claude Code, but install from the repository as above.
+
+To update, run `grok plugin update`. To remove it, run `grok plugin uninstall claude-wcag-audit`. Dependencies go in `~/.cache/claude-wcag-audit`.
 
 ## Use
 
@@ -49,7 +65,7 @@ Ask for an audit:
 /claude-wcag-audit:wcag-audit https://example.com
 ```
 
-or just say "run an accessibility audit on our staging site". Claude finds the pages from the sitemap, runs the audit, checks the heuristic findings against the live page, and reports back with the report path.
+or just say "run an accessibility audit on our staging site". In Grok, ask it to use the wcag-audit skill. Claude finds the pages from the sitemap, runs the audit, checks the heuristic findings against the live page, and reports back with the report path.
 
 ## What it checks
 
@@ -76,7 +92,7 @@ Each audit writes four things to the output folder:
 - `report.html` is a single file with no external requests. It has the summary, a filterable table of all criteria linked to the W3C Understanding pages, findings grouped across pages, a manual checklist that remembers your ticks, evidence for manual review (alt text inventory, forms, headings, media) and a per-page table. It works in light and dark mode, prints cleanly, and passes its own audit.
 - `report.md` has the same content for pasting into issues or docs.
 - `results.json` holds every raw finding.
-- `shots/` holds screenshots for focus-indicator findings.
+- `shots/` holds the screenshots shown in the report. Every failing and likely-failing element gets a picture with the element outlined in red, and each review group gets four examples, taken in the state the check found it: under text spacing for clipped text, at 320px with the viewport edge marked for reflow. Missing focus indicators show the element while focused.
 
 Findings are graded so you know how much to trust them:
 
@@ -128,7 +144,8 @@ node scripts/audit.mjs http://localhost:3000 --pages /,/contact,/pricing --out a
 | `--max-pages N` | 40 | |
 | `--concurrency N` | 3 | Pages audited in parallel |
 | `--max-tabs N` | 200 | Tab presses per page |
-| `--skip LIST` | | Any of `keyboard`, `toggles`, `hover`, `mobile`, `zoom`, `spacing` |
+| `--skip LIST` | | Any of `keyboard`, `toggles`, `hover`, `mobile`, `zoom`, `spacing`, `shots` |
+| `--max-shots N` | no limit | Overall limit on evidence screenshots |
 | `--out DIR` | `./a11y-report` | |
 
 Expect 20 to 40 seconds per page. The script never submits forms. It does open menus and dialogs and change `<select>` values, so run it against sites you own, ideally staging. It starts each page in a fresh browser with no login, so authenticated areas aren't covered yet.
@@ -138,7 +155,7 @@ Expect 20 to 40 seconds per page. The script never submits forms. It does open m
 - axe is injected with Playwright's `page.evaluate` in a context that bypasses CSP, so a strict `script-src` doesn't block it. The script doesn't load anything from a CDN.
 - The focus check takes a screenshot of each focused element and its surroundings, blurs it, takes another and counts pixels that changed significantly. Fewer than ten means there's no visible indicator.
 - Zoom levels are real viewports at a higher device pixel ratio (640×400 at 2x for 200%, 320×256 at 4x for 400%), which matches how browser zoom changes layout.
-- Clipping is found by measuring each text node's rendered boxes against the nearest `overflow: hidden` ancestor. Visually hidden text, `aria-hidden` content and text inside scrollable containers are ignored.
+- Clipping is found by measuring each text node's rendered boxes against the `overflow: hidden` ancestor that cuts it off. The finding names the element that holds the text and the box that clips it. Visually hidden text, `aria-hidden` content and text inside scrollable containers are ignored. A select chevron (a small no-repeat background image) does not skip the field-border check.
 - The keyboard walk understands roving tabindex in tabs and menus, native date inputs and embedded frames, so those don't show up as traps or unreachable elements.
 
 ## Limits
@@ -163,6 +180,7 @@ scripts/wcag.mjs      success criteria, coverage, check definitions
 scripts/report.mjs    shared report model and Markdown output
 scripts/html-report.mjs  HTML output
 scripts/render.mjs    re-renders reports from results.json and notes.json
+scripts/measure.mjs   re-measures contrast, target size and clipped text for notes.json
 test/fixture.html     page with planted failures
 ```
 

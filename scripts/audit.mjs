@@ -4,15 +4,14 @@
 //
 // usage: node audit.mjs <base-url> [--sitemap URL] [--pages /a,/b] [--max-pages 40]
 //                       [--concurrency 3] [--max-tabs 200] [--out DIR]
-//                       [--skip keyboard,toggles,hover,mobile,zoom,spacing]
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
+//                       [--skip keyboard,toggles,hover,mobile,zoom,spacing,shots] [--max-shots N]
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { homedir } from 'node:os';
 import { CHECKS } from './wcag.mjs';
 import { renderReport } from './report.mjs';
 import { renderHtml } from './html-report.mjs';
-import { chromium, AXE_SRC, PLAYWRIGHT_CLI } from './deps.mjs';
+import { AXE_SRC, launchBrowser } from './deps.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HELPERS = readFileSync(join(HERE, 'page-helpers.js'), 'utf8');
@@ -37,7 +36,7 @@ function parseArgs(argv) {
 }
 const args = parseArgs(process.argv.slice(2));
 if (!args._[0]) {
-  console.error('usage: node audit.mjs <base-url> [--sitemap URL] [--pages /a,/b] [--max-pages N] [--concurrency N] [--max-tabs N] [--out DIR] [--skip keyboard,toggles,hover,mobile,zoom,spacing]');
+  console.error('usage: node audit.mjs <base-url> [--sitemap URL] [--pages /a,/b] [--max-pages N] [--concurrency N] [--max-tabs N] [--out DIR] [--skip keyboard,toggles,hover,mobile,zoom,spacing,shots] [--max-shots N]');
   process.exit(2);
 }
 const BASE = args._[0].replace(/\/$/, '');
@@ -49,34 +48,9 @@ const MAX_TABS = Number(args['max-tabs'] || 200);
 const SKIP = new Set(String(args.skip || '').split(',').filter(Boolean));
 mkdirSync(SHOTS, { recursive: true });
 
-// ---------- browser ----------
-function cachedChromium() {
-  const roots = [process.env.PLAYWRIGHT_BROWSERS_PATH, join(homedir(), 'Library/Caches/ms-playwright'), join(homedir(), '.cache/ms-playwright'),
-    process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, 'ms-playwright')].filter(Boolean);
-  for (const root of roots) {
-    if (!existsSync(root)) continue;
-    const dirs = readdirSync(root).filter(d => /^chromium(_headless_shell)?-\d+$/.test(d))
-      .sort((x, y) => Number(y.split('-').pop()) - Number(x.split('-').pop()));
-    for (const d of dirs) {
-      for (const rel of ['chrome-headless-shell-mac-arm64/chrome-headless-shell', 'chrome-headless-shell-mac-x64/chrome-headless-shell',
-        'chrome-mac/headless_shell', 'chrome-linux/headless_shell', 'chrome-headless-shell-linux64/chrome-headless-shell',
-        'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
-        'chrome-mac/Chromium.app/Contents/MacOS/Chromium', 'chrome-linux/chrome', 'chrome-linux64/chrome',
-        'chrome-headless-shell-win64/chrome-headless-shell.exe', 'chrome-win/headless_shell.exe', 'chrome-win64/chrome.exe', 'chrome-win/chrome.exe']) {
-        const p = join(root, d, rel);
-        if (existsSync(p)) return p;
-      }
-    }
-  }
-  return null;
-}
-async function launch() {
-  if (process.env.CHROME_BIN) return chromium.launch({ executablePath: process.env.CHROME_BIN });
-  try { return await chromium.launch(); } catch (e) {
-    const p = cachedChromium();
-    if (p) { console.error(`[a11y] bundled browser missing, using cached ${p}`); return chromium.launch({ executablePath: p }); }
-    throw new Error(`No Chromium available. Run "node ${PLAYWRIGHT_CLI} install chromium" or set CHROME_BIN.\n${e.message}`);
-  }
+function clipFields(c, lead) {
+  const by = c.owner && c.owner !== c.key ? ` Text is in ${c.owner}. Clipped by ${c.key}.` : '';
+  return { target: c.owner || c.key, html: c.ownerHtml || c.html, detail: lead + by };
 }
 
 // ---------- state ----------
@@ -293,14 +267,17 @@ function inventoryChecks(url, inv) {
     [/(first|given)[ _-]?name|fname/i, ['given-name']], [/(last|family|sur)[ _-]?name|lname/i, ['family-name']],
     [/phone|tel\b|mobile/i, ['tel', 'tel-national']],
     [/(organi[sz]ation|company|institution|employer)(?![ _-]?(type|size|kind|category))/i, ['organization']],
-    [/job[ _-]?title|^title$|\brole\b/i, ['organization-title']],
+    [/job[ _-]?title|^title$/i, ['organization-title']],
     [/zip|postal/i, ['postal-code']], [/country/i, ['country', 'country-name']], [/city|town/i, ['address-level2']],
     [/street|address/i, ['street-address', 'address-line1', 'address-line2']], [/website|url/i, ['url']],
   ];
   for (const f of inv.fields) {
     const hay = [f.label, f.name, f.id, f.placeholder].filter(Boolean).join(' ');
     if (['checkbox', 'radio', 'search', 'password', 'file', 'range', 'date', 'hidden'].includes(f.type)) continue;
-    const match = purposes.find(([re]) => re.test(hay));
+    // "role" on a text field is a job title. On a select it is usually a category
+    // (Legal, Research), which has no autocomplete token.
+    const match = purposes.find(([re]) => re.test(hay))
+      || (!['select-one', 'select-multiple'].includes(f.type) && /\brole\b/i.test(hay) ? [null, ['organization-title']] : null);
     if (match) {
       const ac = (f.autocomplete || '').toLowerCase().split(/\s+/);
       if (!match[1].some(tok => ac.includes(tok))) add('input-autocomplete-missing', { url, vp, target: f.key, detail: `Field "${hay.slice(0, 60)}" has autocomplete="${f.autocomplete || ''}"; expected ${match[1].join(' or ')}.` });
@@ -346,13 +323,14 @@ async function auditDesktop(ctx, url) {
     if (!SKIP.has('spacing')) {
       await page.evaluate(() => scrollTo(0, 0));
       const before = await page.evaluate(() => window.__a11y.clipped());
-      P.clippedDesktop = before.map(c => c.key);
+      const clipId = c => c.owner || c.key;
+      P.clippedDesktop = before.map(clipId);
       const style = await page.addStyleTag({ content: SPACING_CSS });
       await page.waitForTimeout(400);
       const after = await page.evaluate(() => window.__a11y.clipped());
       await style.evaluate(n => n.remove());
-      for (const c of after.filter(a => !before.some(b => b.key === a.key))) {
-        add('text-spacing-clipped', { url, vp, target: c.key, html: c.html, detail: `"${c.text}" overflows its container ${c.outY ? 'vertically' : 'horizontally'}.` });
+      for (const c of after.filter(a => !before.some(b => clipId(b) === clipId(a)))) {
+        add('text-spacing-clipped', { url, vp, ...clipFields(c, `"${c.text}" overflows its container ${c.outY ? 'vertically' : 'horizontally'}.`) });
       }
     }
 
@@ -405,15 +383,15 @@ async function auditZoom(ctx, url, vp) {
     }));
     P[vp] = { scrollWidth: r.sw, clientWidth: r.cw };
     const base = new Set(P.clippedDesktop || []);
-    const newClip = r.clip.filter(c => !base.has(c.key));
+    const newClip = r.clip.filter(c => !base.has(c.owner || c.key));
     if (vp === 'reflow') {
       if (r.sw > r.cw + 1) {
         if (!r.over.length) add('reflow-horizontal-scroll', { url, vp, target: 'html', detail: `Page is ${r.sw}px wide in a ${r.cw}px viewport.` });
         for (const o of r.over) add('reflow-horizontal-scroll', { url, vp, target: o.key, html: o.html, detail: `Page is ${r.sw}px wide in a ${r.cw}px viewport; this element ends at ${o.right}px.` });
       }
-      for (const c of newClip) add('reflow-clipped-text', { url, vp, target: c.key, html: c.html, detail: `"${c.text}" is cut off.` });
+      for (const c of newClip) add('reflow-clipped-text', { url, vp, ...clipFields(c, `"${c.text}" is cut off.`) });
     } else {
-      for (const c of newClip) add('zoom200-clipped-text', { url, vp, target: c.key, html: c.html, detail: `"${c.text}" is cut off.` });
+      for (const c of newClip) add('zoom200-clipped-text', { url, vp, ...clipFields(c, `"${c.text}" is cut off.`) });
     }
   } finally {
     await page.close();
@@ -585,7 +563,7 @@ async function discover(browser) {
 
 // ---------- main ----------
 const started = Date.now();
-const browser = await launch();
+const browser = await launchBrowser();
 const diffCtx = await browser.newContext();
 diffPage = await diffCtx.newPage();
 const urls = await discover(browser);
@@ -633,6 +611,87 @@ async function worker() {
 }
 await Promise.all(Array.from({ length: Math.min(CONCURRENCY, urls.length) }, worker));
 siteChecks(urls);
+
+// ---------- evidence screenshots ----------
+// An outlined screenshot of every failing and likely-failing element, and of the first few
+// elements in each review group, taken in the state the check found them in. Each url, viewport
+// and state is loaded once. --max-shots sets an overall limit; there is none by default.
+const REVIEW_SHOTS_PER_CHECK = 4, MAX_SHOTS = args['max-shots'] ? Number(args['max-shots']) : Infinity;
+const SPACING_CHECKS = new Set(['text-spacing-clipped']);
+function shotSelector(t) {
+  if (typeof t === 'string') return t && t !== 'html' && t !== 'body' ? t : null;
+  return Array.isArray(t) && t.length === 1 && typeof t[0] === 'string' ? t[0] : null;   // axe target outside frames and shadow roots
+}
+async function evidenceShots() {
+  const jobs = new Map(), perCheck = new Map();
+  let queued = 0;
+  for (const f of findings) {
+    if (queued >= MAX_SHOTS || f.shot || f.status === 'bp' || !VIEWPORTS[f.vp] || /^\[/.test(f.detail || '')) continue;   // "[opened ...]" states aren't reproduced
+    const sel = shotSelector(f.target);
+    const seen = perCheck.get(f.check) || new Set();
+    if (!sel || seen.has(sel) || (f.status === 'review' && seen.size >= REVIEW_SHOTS_PER_CHECK)) continue;
+    seen.add(sel); perCheck.set(f.check, seen);
+    const state = SPACING_CHECKS.has(f.check) ? 'spacing' : '';
+    const key = `${f.url}|${f.vp}|${state}`;
+    if (!jobs.has(key)) jobs.set(key, { url: f.url, vp: f.vp, state, items: [] });
+    jobs.get(key).items.push({ f, sel });
+    queued++;
+  }
+  const ctxs = {};
+  let taken = 0;
+  for (const job of jobs.values()) {
+    const ctx = ctxs[job.vp] ||= await newCtx(job.vp);
+    let page;
+    try {
+      page = await open(ctx, job.url);
+      if (job.state === 'spacing') { await page.addStyleTag({ content: SPACING_CSS }); await page.waitForTimeout(400); }
+      for (const { f, sel } of job.items) {
+        const rect = await page.evaluate(({ sel, edge }) => {
+          let el; try { el = document.querySelector(sel); } catch { return null; }
+          if (!el) return null;
+          el.scrollIntoView({ block: 'center', inline: 'nearest' });
+          const r = el.getBoundingClientRect();
+          if (r.width < 1 && r.height < 1) return null;
+          const x = r.left + scrollX, y = r.top + scrollY;
+          const docW = document.documentElement.scrollWidth, docH = document.documentElement.scrollHeight;
+          if (x + r.width <= 0 || y + r.height <= 0 || x >= docW || y >= docH) return null;   // positioned off the page
+          // The outline sits 6px outside the element so a faint border or clipped edge stays visible.
+          const box = document.createElement('div');
+          box.className = '__a11y-outline';
+          box.style.cssText = `position:absolute;left:${x - 9}px;top:${y - 9}px;width:${r.width + 18}px;height:${r.height + 18}px;` +
+            'border:3px solid #d0021b;outline:2px solid #fff;box-shadow:0 0 0 5px rgba(208,2,27,.25);border-radius:3px;pointer-events:none;z-index:2147483647;box-sizing:border-box';
+          document.body.appendChild(box);
+          if (edge) {   // reflow: mark where the viewport ends so the overflow is visible
+            const line = document.createElement('div');
+            line.className = '__a11y-outline';
+            line.style.cssText = `position:absolute;left:${innerWidth}px;top:0;width:0;height:${docH}px;border-left:2px dashed #d0021b;pointer-events:none;z-index:2147483647`;
+            document.body.appendChild(line);
+          }
+          return { x, y, w: r.width, h: r.height, docW, docH };
+        }, { sel, edge: f.check === 'reflow-horizontal-scroll' }).catch(() => null);
+        if (!rect) continue;
+        const pad = 48, maxW = 1000, maxH = 640;
+        const w = Math.min(maxW, rect.w + pad * 2), h = Math.min(maxH, rect.h + pad * 2);
+        const x = Math.max(0, Math.min(rect.x + rect.w / 2 - w / 2, rect.docW - w));
+        const y = Math.max(0, Math.min(rect.y + rect.h / 2 - h / 2, rect.docH - h));
+        const shot = `shots/${f.check.replace(/[^a-z0-9]+/gi, '-')}-${++shotN}.png`;
+        try {
+          await page.screenshot({ path: join(OUT, shot), fullPage: true, clip: { x, y, width: Math.max(1, w), height: Math.max(1, h) }, animations: 'disabled', caret: 'hide' });
+          for (const g of findings) if (g.check === f.check && g.target === f.target && !g.shot) g.shot = shot;
+          taken++;
+        } catch { /* element moved or page navigated; leave it without a picture */ }
+        await page.evaluate(() => document.querySelectorAll('.__a11y-outline').forEach(n => n.remove())).catch(() => {});
+      }
+    } catch (e) {
+      console.error(`[a11y] screenshots for ${job.url} (${job.vp}) failed: ${e.message.split('\n')[0]}`);
+    } finally {
+      await page?.close();
+    }
+  }
+  for (const c of Object.values(ctxs)) await c.close();
+  console.error(`[a11y] ${taken} evidence screenshots`);
+}
+if (!SKIP.has('shots')) await evidenceShots();
 await browser.close();
 
 const results = {

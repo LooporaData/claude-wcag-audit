@@ -39,6 +39,7 @@ h3{font-size:1.08rem;margin:0}
 nav.toc ul{list-style:none;display:flex;flex-wrap:wrap;gap:6px 18px;padding:0;margin:14px 0 0}
 .lead{font-size:1.05rem;max-width:72ch}
 .note{color:var(--muted);max-width:72ch}
+.toolbar .n{display:inline-block;min-width:1.6em;padding:0 .4em;margin-left:.3em;border-radius:999px;background:var(--border);font-variant-numeric:tabular-nums;font-size:.85em}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin:16px 0}
 .tile{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
 .tile b{display:block;font-size:1.6rem;line-height:1.1;font-variant-numeric:tabular-nums}
@@ -52,6 +53,7 @@ ${['fail', 'likely', 'review', 'pass-good', 'pass-partial', 'manual', 'na', 'bp'
 .toolbar{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
 .toolbar button,.btn{font:inherit;font-size:.9rem;padding:5px 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;min-height:32px}
 .toolbar button[aria-pressed=true]{background:var(--text);color:var(--bg);border-color:var(--text)}
+.toolbar button[aria-pressed=true] .n{background:var(--bg);color:var(--text)}
 .scroll{overflow-x:auto;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
 table{border-collapse:collapse;width:100%;font-size:.93rem}
 caption{text-align:left;padding:10px 12px;color:var(--muted)}
@@ -93,7 +95,7 @@ const JS = `
     const f = b.dataset.filter;
     let n = 0;
     document.querySelectorAll('#criteria tbody tr').forEach(tr => {
-      const show = f === 'all' || tr.dataset.result === f || (f === 'pass' && tr.dataset.result.startsWith('pass'));
+      const show = f === 'all' || tr.dataset.result === f;
       tr.hidden = !show; if (show) n++;
     });
     document.getElementById('criteria-count').textContent = n + ' criteria shown';
@@ -151,7 +153,7 @@ export function renderHtml(r) {
 
   // Criteria
   H.push(`<section aria-labelledby="criteria-h"><h2 id="criteria-h">Success criteria</h2>`);
-  H.push(`<div class="toolbar" role="group" aria-label="Filter criteria by result"><button type="button" data-filter="all" aria-pressed="true">All</button>${['fail', 'likely', 'review', 'pass', 'manual', 'na'].filter(k => k === 'pass' ? (tally['pass-good'] || tally['pass-partial']) : tally[k]).map(k => `<button type="button" data-filter="${k}" aria-pressed="false">${esc(k === 'pass' ? 'Passed' : RESULT_SHORT[k])}</button>`).join('')}</div>`);
+  H.push(`<div class="toolbar" role="group" aria-label="Filter criteria by result"><button type="button" data-filter="all" aria-pressed="true">All <span class="n">${active.length}</span></button>${RESULT_ORDER.filter(k => tally[k]).map(k => `<button type="button" data-filter="${k}" aria-pressed="false">${esc(RESULT_LABEL[k])} <span class="n">${tally[k]}</span></button>`).join('')}</div>`);
   H.push(`<p class="note" id="criteria-count" aria-live="polite">${rows.length} criteria shown</p>`);
   H.push(`<div class="scroll" role="region" aria-label="Success criteria table" tabindex="0"><table id="criteria"><caption>WCAG 2.1 A and AA criteria plus the WCAG 2.2 additions, with the result of this audit</caption>`);
   H.push(`<thead><tr><th scope="col">SC</th><th scope="col">Criterion</th><th scope="col">Level</th><th scope="col">Result</th><th scope="col">Findings</th><th scope="col">How checked</th></tr></thead><tbody>`);
@@ -169,7 +171,7 @@ export function renderHtml(r) {
     const items = targets.slice(0, 25).map(t => `<li><code>${esc(t.target)}</code><div class="where">${esc(pageList(t.pages))} · ${esc([...t.vps].join(', '))}</div>` +
       (t.html ? `<pre><code>${esc(t.html)}</code></pre>` : '') +
       [...t.details].slice(0, 2).map(d => `<div>${esc(d)}</div>`).join('') +
-      (t.shot ? `<img class="shot" src="${esc(t.shot)}" alt="Screenshot of ${esc(t.target)} while focused" loading="lazy">` : '') + '</li>').join('');
+      (t.shot ? `<img class="shot" src="${esc(t.shot)}" alt="${g.check === 'kbd-no-focus-indicator' ? `Screenshot of ${esc(t.target)} while focused` : `Screenshot with ${esc(t.target)} outlined in red`}" loading="lazy">` : '') + '</li>').join('');
     return `<article class="finding finding--${g.status}" id="${gid(g.check)}" aria-labelledby="${gid(g.check)}-t"><div class="head"><h3 id="${gid(g.check)}-t">${esc(g.title)}</h3><span>${statusChips(g)}</span></div>
 <dl><dt>WCAG</dt><dd>${g.sc.length ? esc(g.sc.join(', ')) : 'Best practice'}${g.impact ? ` · axe impact: ${esc(g.impact)}` : ''}</dd><dt>Scope</dt><dd>${targets.length} element${targets.length === 1 ? '' : 's'} on ${esc(pageList(allPages))}</dd>${g.note ? `<dt>Verification</dt><dd class="verify">${esc(g.note)}</dd>` : ''}<dt>Fix</dt><dd>${fix}</dd><dt>Check</dt><dd><code>${esc(g.check)}</code></dd></dl>
 <details${open ? ' open' : ''}><summary>${targets.length === 1 ? 'Affected element' : `Affected elements (${targets.length})`}</summary><ol class="els">${items}</ol>${targets.length > 25 ? `<p class="note">${targets.length - 25} more in results.json.</p>` : ''}</details></article>`;

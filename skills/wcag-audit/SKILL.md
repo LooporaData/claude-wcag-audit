@@ -16,12 +16,16 @@ Automated tools can't certify WCAG conformance. This skill automates as much as 
 
 ## 2. Run the audit
 
-On the first run the script installs the pinned axe-core and Playwright into the plugin's data folder, which takes about a minute and needs network access. If Playwright's bundled browser is missing, the script falls back to any Chromium in the Playwright cache, or `CHROME_BIN`. Otherwise its error message gives the exact `install chromium` command to run.
+`<root>` below is the plugin folder, two levels above this file (`<root>/skills/wcag-audit/SKILL.md`). It holds `scripts/` and `package.json`. In Claude Code it is `${CLAUDE_PLUGIN_ROOT}`. If that path still reads as a variable name, as it does in Grok Build, work the path out from where this file was loaded. Always pass `node` an absolute path. Don't write `VAR=path node "$VAR/..."`, because the shell expands `$VAR` before the assignment applies.
+
+Dependencies install into `${CLAUDE_PLUGIN_DATA}` when Claude Code provides it, so pass it as shown. Where it's empty, they go in `~/.cache/claude-wcag-audit`.
+
+On the first run that install takes about a minute and needs network access. If Playwright's bundled browser is missing, the script falls back to any Chromium in the Playwright cache, or `CHROME_BIN`. Otherwise its error message gives the exact `install chromium` command to run.
 
 ```bash
-CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" node "${CLAUDE_PLUGIN_ROOT}/scripts/audit.mjs" <base-url> --out <scratch-dir>/a11y-report \
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" node <root>/scripts/audit.mjs <base-url> --out <scratch-dir>/a11y-report \
   [--pages /,/contact] [--max-pages 40] [--concurrency 3] [--max-tabs 200] \
-  [--skip keyboard,toggles,hover,mobile,zoom,spacing]
+  [--skip keyboard,toggles,hover,mobile,zoom,spacing,shots] [--max-shots N]
 ```
 
 It takes about 20 to 40 seconds per page at concurrency 3, so run it in the background for more than a few pages. Write output to the scratchpad unless the user names a location. It writes:
@@ -29,7 +33,7 @@ It takes about 20 to 40 seconds per page at concurrency 3, so run it in the back
 - `report.md`
 - `report.html`: self-contained, works offline, light and dark, criteria filter, saved checklist ticks
 - `results.json`
-- `shots/`: focus screenshots
+- `shots/`: focus screenshots, a screenshot of every failing and likely-failing element with the element outlined in red, and four examples from each review group. The report shows them inline.
 
 axe-core is an npm dependency (pinned in `package-lock.json`). The script injects it through Playwright with CSP bypass, so strict Content-Security-Policy headers don't block it.
 
@@ -60,10 +64,19 @@ The criteria map with coverage levels and manual instructions is in `scripts/wca
 
 `report.md` separates **Fail** (confident), **Likely fail** (heuristic), **Needs review** and **Best practice**. Before telling the user something fails:
 
-- **Likely fail**: confirm each group with at least one example. Look at the focus screenshot in `shots/`, or open the page with browser tools and reproduce it: Tab to the element, zoom, apply the spacing CSS. Drop false positives and say you did.
-- **axe "needs review" color contrast** (gradients, images, overlapping elements): measure a sample. Take a screenshot and read the pixel colors, or compute them from the computed styles. Report real failures and summarize the rest.
+- **Likely fail**: confirm each group with at least one example. Start with its screenshot in `shots/`, or open the page with browser tools and reproduce it: Tab to the element, zoom, apply the spacing CSS. Drop false positives and say you did.
+- **axe "needs review" color contrast** (gradients, images, overlapping elements) and **target size** axe could not measure: run `measure.mjs` (below) and use its ratios and sizes. Report real failures and summarize the sample that passed.
+- **Clipped text**: the finding names the element that holds the text and the box that clips it. Confirm one example. `measure.mjs` reprints those owners under spacing and at 320 CSS px.
 - **Repeated components**: a header or footer problem shows up on every page. Report it once, with its scope.
 - **Best-practice findings** (axe `best-practice` rules, Escape handling, reduced motion) aren't WCAG A/AA failures. Keep them separate.
+
+When the report has likely fails, contrast reviews, or target-size reviews, measure them with the script instead of writing a one-off browser script:
+
+```bash
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" node <root>/scripts/measure.mjs <out>
+```
+
+It prints JSON. Contrast samples copy the computed color before they hide the text, then read the pixels behind it. A passing sample is `no-issue` for that group only when the samples cover the pattern. A failing sample is `confirmed`.
 
 Record what you verified in `<out>/notes.json`, keyed by check id (the `Check` value in the report, e.g. `input-boundary-contrast` or `axe-review:target-size`):
 
@@ -76,7 +89,7 @@ Record what you verified in `<out>/notes.json`, keyed by check id (the `Check` v
 - `decision` keeps it under Needs review, labeled as needing the owner's decision.
 - A note with no verdict just annotates the group.
 
-Then regenerate both reports without rescanning: `node "${CLAUDE_PLUGIN_ROOT}/scripts/render.mjs" <out>`. If a false positive comes from a heuristic in the script, fix the script too and rerun the fixture checks before relying on it.
+Then regenerate both reports without rescanning: `node <root>/scripts/render.mjs <out>`. If a false positive comes from a heuristic in the script, fix the script too and rerun the fixture checks before relying on it.
 
 ## 4. Report to the user
 

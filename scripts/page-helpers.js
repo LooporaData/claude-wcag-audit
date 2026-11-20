@@ -144,6 +144,7 @@
   }
 
   // Text that is cut off by an overflow:hidden/clip ancestor.
+  // One record per text element. `owner` is that element. `key` is the box that clips it.
   function clipped() {
     const out = [];
     const hid = v => v === 'hidden' || v === 'clip';
@@ -156,7 +157,7 @@
       const left = box.left + el.clientLeft, top = box.top + el.clientTop;
       const right = left + el.clientWidth, bottom = top + el.clientHeight;
       const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-      let n, hit = null, count = 0;
+      let n, count = 0;
       while ((n = walker.nextNode()) && count < 400) {
         count++;
         if (!n.textContent.trim()) continue;
@@ -174,14 +175,20 @@
           if (rr.width < 1 || rr.height < 1) continue;
           const outY = hid(cs.overflowY) && (rr.bottom > bottom + 1.5 || rr.top < top - 1.5);
           const outX = hid(cs.overflowX) && (rr.right > right + 1.5 || rr.left < left - 1.5);
-          if (outY || outX) { hit = { text: short(n.textContent, 80), outX, outY }; break; }
+          if (outY || outX) {
+            out.push({ key: cssPath(el), html: short(el.outerHTML, 160), owner: cssPath(pe), ownerHtml: short(pe.outerHTML, 160), text: short(n.textContent, 80), outX, outY });
+            break;
+          }
         }
-        if (hit) break;
       }
-      if (hit) out.push({ key: cssPath(el), html: short(el.outerHTML, 160), ...hit });
     }
-    // keep the innermost clipping container for each piece of text
-    return out.filter(a => !out.some(b => b !== a && b.key.startsWith(a.key + ' > ')));
+    // For each text element, keep the innermost box that actually clips it.
+    const byOwner = new Map();
+    for (const a of out) {
+      const prev = byOwner.get(a.owner);
+      if (!prev || a.key.length > prev.key.length) byOwner.set(a.owner, a);
+    }
+    return [...byOwner.values()];
   }
 
   // Elements that stick out past the right edge of the viewport and cause page scroll.
@@ -241,6 +248,27 @@
     return col;
   }
 
+  // A small no-repeat icon (a select chevron) does not paint the field, so the
+  // border and fill can still be measured. A gradient or a large image cannot.
+  function spotBackground(el, s) {
+    const img = s.backgroundImage;
+    if (!img || img === 'none' || /gradient\(/i.test(img)) return false;
+    if (s.backgroundRepeat.split(',')[0].trim() !== 'no-repeat') return false;
+    const box = el.getBoundingClientRect();
+    const size = s.backgroundSize.split(',')[0].trim().split(/\s+/);
+    const px = token => token && token.endsWith('px') ? parseFloat(token) : null;
+    const w = px(size[0]);
+    const h = px(size[1] || size[0]);
+    if (w != null && h != null) return w <= 48 && h <= 48 && w <= box.width * 0.45 && h <= box.height * 0.45;
+    let dec = img;
+    try { dec = decodeURIComponent(img); } catch { /* already decoded */ }
+    const mw = dec.match(/width=['"](\d+(?:\.\d+)?)['"]/i);
+    const mh = dec.match(/height=['"](\d+(?:\.\d+)?)['"]/i);
+    if (!mw || !mh) return false;
+    const iw = parseFloat(mw[1]), ih = parseFloat(mh[1]);
+    return iw <= 48 && ih <= 48 && iw <= box.width * 0.45 && ih <= box.height * 0.45;
+  }
+
   function inputBoundaries() {
     const out = [];
     for (const el of document.querySelectorAll('input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=button]):not([type=image]):not([type=range]):not([type=color]):not([type=file]), textarea, select')) {
@@ -248,7 +276,7 @@
       const s = getComputedStyle(el);
       const outside = bgBehind(el);
       if (!outside) continue;
-      if (s.backgroundImage && s.backgroundImage !== 'none') continue;
+      if (s.backgroundImage && s.backgroundImage !== 'none' && !spotBackground(el, s)) continue;
       const own = parseColor(s.backgroundColor);
       const fill = own && own.a > 0 ? blend(own, outside) : outside;
       const fillRatio = contrast(fill, outside);

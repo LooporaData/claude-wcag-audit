@@ -9,6 +9,7 @@ header a{color:#fff}
 .wide{width:900px;background:#eee}
 .clicky{cursor:pointer;color:#06c}
 input.faint{border:1px solid #ddd;background:#fff}
+select.chevron{border:1px solid #ddd;background-color:#fff;background-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'></svg>");background-repeat:no-repeat;background-size:12px 8px;background-position:right 8px center}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spinner{width:80px;height:80px;background:#c33;animation:spin 3s linear infinite}
 #menu{display:none}
@@ -25,6 +26,9 @@ input.faint{border:1px solid #ddd;background:#fff}
 <div role="button" id="t" aria-expanded="false" onclick="document.getElementById('menu').style.display='block'">Open menu (click only)</div>
 <ul id="menu"><li><a href="/a">A</a></li><li><a href="/b">B</a></li><li><a href="/c">C</a></li><li><a href="/d">D</a></li></ul>
 <label>Email <input class="faint" name="email"></label>
+<label>Job title <input name="job-title"></label>
+<label>Role <select name="role"><option>Legal</option><option>Research</option></select></label>
+<label>Heard <select class="chevron" name="heard"><option>Search</option><option>Event</option></select></label>
 <a href="/one">Read more</a> <a href="/two">Read more</a>
 <div class="spinner"></div>
 <div style="height:1200px"></div>
