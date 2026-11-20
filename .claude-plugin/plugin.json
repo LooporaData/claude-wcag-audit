@@ -1,7 +1,7 @@
 {
   "name": "claude-wcag-audit",
   "description": "Audit a website against WCAG 2.1 and 2.2 Level A and AA with axe-core plus scripted keyboard, focus, zoom, reflow, text-spacing, motion and menu checks. Produces an HTML report with a result for every success criterion.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": {
     "name": "LooporaData",
     "url": "https://github.com/LooporaData"

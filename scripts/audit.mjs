@@ -51,7 +51,8 @@ mkdirSync(SHOTS, { recursive: true });
 
 // ---------- browser ----------
 function cachedChromium() {
-  const roots = [join(homedir(), 'Library/Caches/ms-playwright'), join(homedir(), '.cache/ms-playwright')];
+  const roots = [process.env.PLAYWRIGHT_BROWSERS_PATH, join(homedir(), 'Library/Caches/ms-playwright'), join(homedir(), '.cache/ms-playwright'),
+    process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, 'ms-playwright')].filter(Boolean);
   for (const root of roots) {
     if (!existsSync(root)) continue;
     const dirs = readdirSync(root).filter(d => /^chromium(_headless_shell)?-\d+$/.test(d))
@@ -60,7 +61,8 @@ function cachedChromium() {
       for (const rel of ['chrome-headless-shell-mac-arm64/chrome-headless-shell', 'chrome-headless-shell-mac-x64/chrome-headless-shell',
         'chrome-mac/headless_shell', 'chrome-linux/headless_shell', 'chrome-headless-shell-linux64/chrome-headless-shell',
         'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
-        'chrome-mac/Chromium.app/Contents/MacOS/Chromium', 'chrome-linux/chrome']) {
+        'chrome-mac/Chromium.app/Contents/MacOS/Chromium', 'chrome-linux/chrome', 'chrome-linux64/chrome',
+        'chrome-headless-shell-win64/chrome-headless-shell.exe', 'chrome-win/headless_shell.exe', 'chrome-win64/chrome.exe', 'chrome-win/chrome.exe']) {
         const p = join(root, d, rel);
         if (existsSync(p)) return p;
       }

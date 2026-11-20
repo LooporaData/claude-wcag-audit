@@ -37,7 +37,7 @@ To offer it to everyone working in a project, commit this to the project's `.cla
 }
 ```
 
-You need Node.js 18 or later and npm. The first audit installs the pinned axe-core and Playwright into the plugin's data folder, which takes about a minute. The audit also needs Chromium. If Playwright's browser isn't installed, the script falls back to any Chromium already in the Playwright cache or to `CHROME_BIN`, and otherwise prints the command that installs it.
+It runs on macOS and Linux. Windows should work too, but hasn't been tested yet. You need Node.js 18 or later and npm. The first audit installs the pinned axe-core and Playwright into the plugin's data folder, which takes about a minute. The audit also needs Chromium. If Playwright's browser isn't installed, the script falls back to any Chromium already in the Playwright cache or to `CHROME_BIN`, and otherwise prints the command that installs it.
 
 To update, run `/plugin marketplace update looporadata`. To remove it, run `/plugin uninstall claude-wcag-audit@looporadata`.
 

@@ -17,11 +17,12 @@ function depsDir() {
   const { '': _self, ...pinned } = JSON.parse(readFileSync(join(ROOT, 'package-lock.json'), 'utf8')).packages;
   const base = process.env.CLAUDE_PLUGIN_DATA || join(homedir(), '.cache', 'claude-wcag-audit');
   const dir = join(base, 'deps-' + createHash('sha256').update(JSON.stringify(pinned)).digest('hex').slice(0, 12));
+  // On Windows npm is npm.cmd, which Node only runs through a shell.
   if (!existsSync(join(dir, 'node_modules', 'playwright'))) {
     console.error(`[a11y] installing axe-core and Playwright into ${dir}`);
     mkdirSync(dir, { recursive: true });
     for (const f of ['package.json', 'package-lock.json']) copyFileSync(join(ROOT, f), join(dir, f));
-    execFileSync('npm', ['ci', '--omit=dev', '--no-audit', '--no-fund', '--loglevel=error'], { cwd: dir, stdio: ['ignore', 'ignore', 'inherit'] });
+    execFileSync('npm', ['ci', '--omit=dev', '--no-audit', '--no-fund', '--loglevel=error'], { cwd: dir, stdio: ['ignore', 'ignore', 'inherit'], shell: process.platform === 'win32' });
   }
   return dir;
 }
