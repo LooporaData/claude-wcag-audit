@@ -137,14 +137,14 @@ export function renderReport(r) {
   section('Resolved during verification', ['resolved'], 'Automated findings that a person checked and found not to be failures. They are excluded from the criteria results.');
 
   L.push('## Manual checklist', '');
-  L.push('These criteria have no automated check, or only partial coverage. Evidence gathered during the scan is listed where it helps.', '');
+  L.push('These criteria have no automated check, or only partial coverage. The inventory below lists what the scan found that helps with them.', '');
   for (const row of rows.filter(x => ['pass-partial', 'manual', 'review'].includes(x.result) && !x.obsolete)) {
     L.push(`- [ ] **${row.sc} ${row.name}** (${row.level}): ${row.manual}`);
   }
   for (const row of rows.filter(x => x.result === 'na')) L.push(`- N/A **${row.sc} ${row.name}**: nothing relevant found on the scanned pages.`);
   L.push('');
 
-  L.push('## Evidence', '');
+  L.push('## Inventory for manual checks', '');
   const alts = new Map();
   for (const p of Object.values(r.pages)) for (const img of p.inventory?.imgs || []) {
     const k = `${img.src || img.tag}|${img.alt ?? '(no alt)'}|${img.label || ''}`;

@@ -140,7 +140,7 @@ export function renderHtml(r) {
   H.push(`<body data-key="${esc(r.base)}|${esc(r.date)}"><a class="skip" href="#main">Skip to content</a>`);
   H.push(`<header class="top"><div class="wrap"><h1>Accessibility audit: ${esc(host)}</h1>`);
   H.push(`<p class="meta">${esc(dateStr)} · ${total} page${total === 1 ? '' : 's'} · WCAG 2.2 Level A and AA · axe-core ${esc(r.axe.version)} plus scripted checks</p>`);
-  H.push(`<nav class="toc" aria-label="Report sections"><ul><li><a href="#summary">Summary</a></li><li><a href="#criteria-h">Success criteria</a></li><li><a href="#findings">Findings</a></li><li><a href="#checklist">Manual checklist</a></li><li><a href="#evidence">Evidence</a></li><li><a href="#pages">Pages</a></li></ul></nav></div></header>`);
+  H.push(`<nav class="toc" aria-label="Report sections"><ul><li><a href="#summary">Summary</a></li><li><a href="#criteria-h">Success criteria</a></li><li><a href="#findings">Findings</a></li><li><a href="#checklist">Manual checklist</a></li><li><a href="#inventory">Inventory</a></li><li><a href="#pages">Pages</a></li></ul></nav></div></header>`);
   H.push(`<main id="main" class="wrap">`);
 
   // Summary
@@ -195,7 +195,7 @@ export function renderHtml(r) {
   H.push(`</section>`);
 
   // Evidence
-  H.push(`<section aria-labelledby="evidence" class="evidence"><h2 id="evidence">Evidence for manual review</h2>`);
+  H.push(`<section aria-labelledby="inventory" class="evidence"><h2 id="inventory">Inventory for manual checks</h2>`);
   const alts = new Map();
   for (const p of Object.values(r.pages)) for (const img of p.inventory?.imgs || []) {
     const k = JSON.stringify([img.src || img.tag, img.alt, img.label || '']);

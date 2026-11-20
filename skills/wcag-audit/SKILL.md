@@ -98,7 +98,7 @@ Lead with the outcome in a sentence or two, then:
 1. **Verified failures**: grouped by issue, with the WCAG criterion and level, scope (pages, element count), one example (selector plus HTML), and a specific fix. Order them by user impact (keyboard and focus blockers, contrast, reflow and zoom, then the rest).
 2. **Needs review**: the items that need a human decision, briefly.
 3. **Coverage**: how many of the A/AA criteria failed, need review, passed the automated checks (and whether that coverage is good or partial), or are manual only. Use the matrix in `report.md`.
-4. **Manual checklist**: what still has to be tested by a person (screen reader pass, captions, error handling on forms in a test environment, content quality). Use the evidence section of `report.md`: alt text inventory, headings, forms, media.
+4. **Manual checklist**: what still has to be tested by a person (screen reader pass, captions, error handling on forms in a test environment, content quality). Use the "Inventory for manual checks" section of `report.md`: images and alt text, forms, media, headings.
 5. Paths to `report.html`, `report.md` and `results.json`.
 
 If the user wants a shareable report, offer to publish `report.html` as an artifact (screenshots in `shots/` go with it as supporting files) instead of pasting `report.md` into chat.

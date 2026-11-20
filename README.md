@@ -89,7 +89,7 @@ The full mapping, including the manual steps left for each criterion, is in [`sc
 
 Each audit writes four things to the output folder:
 
-- `report.html` is a single file with no external requests. It has the summary, a filterable table of all criteria linked to the W3C Understanding pages, findings grouped across pages, a manual checklist that remembers your ticks, evidence for manual review (alt text inventory, forms, headings, media) and a per-page table. It works in light and dark mode, prints cleanly, and passes its own audit.
+- `report.html` is a single file with no external requests. It has the summary, a filterable table of all criteria linked to the W3C Understanding pages, findings grouped across pages, a manual checklist that remembers your ticks, an inventory for manual checks (images and alt text, forms, media, headings) and a per-page table. It works in light and dark mode, prints cleanly, and passes its own audit.
 - `report.md` has the same content for pasting into issues or docs.
 - `results.json` holds every raw finding.
 - `shots/` holds the screenshots shown in the report. Every failing and likely-failing element gets a picture with the element outlined in red, and each review group gets four examples, taken in the state the check found it: under text spacing for clipped text, at 320px with the viewport edge marked for reflow. Missing focus indicators show the element while focused.
